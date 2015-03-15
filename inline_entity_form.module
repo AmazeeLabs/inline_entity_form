@@ -996,7 +996,12 @@ function inline_entity_form_add_child_translation_handler($element) {
     $handler->setSourceLanguage($element['#parent_entity']->translations->original);
   }
 
-  $handler->addChild($element['#entity_type'], $element['#entity']);
+  list($id) = entity_extract_ids($element['#entity_type'], $element['#entity']);
+  if ($id !== NULL) {
+    // Only add child if the parent entity is saved. Otherwise it can trigger
+    // recursion.
+    $handler->addChild($element['#entity_type'], $element['#entity']);
+  }
   return $element;
 }
 
