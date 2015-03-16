@@ -1533,7 +1533,7 @@ function inline_entity_form_required_field($element, &$form_state, $form) {
  * Implements hook_field_attach_submit().
  */
 function inline_entity_form_field_attach_submit($parent_entity_type, $parent_entity, $form, &$form_state) {
-  list(, , $bundle_name) = entity_extract_ids($parent_entity_type, $parent_entity);
+  list($parent_id, , $bundle_name) = entity_extract_ids($parent_entity_type, $parent_entity);
 
   foreach (field_info_instances($parent_entity_type, $bundle_name) as $instance_name => $instance) {
     if (isset($instance['widget']) && strpos($instance['widget']['type'], 'inline_entity_form') === 0) {
@@ -1575,6 +1575,21 @@ function inline_entity_form_field_attach_submit($parent_entity_type, $parent_ent
       $need_reset = false;
       foreach ($values['entities'] as $item) {
         if ($item['needs_save']) {
+
+          // If the parent entity is newly created, we probably need to update
+          // the language property on the child entities that were created
+          // inline on this form.
+          if ($parent_id === NULL) {
+            $parent_handler = entity_translation_get_handler($parent_entity_type, $parent_entity);
+            $parent_form_langcode = $parent_handler->getFormLanguage();
+            $handler = entity_translation_get_handler($controller->entityType(), $item['entity']);
+            $item_langcode = $handler->getLanguage();
+            if ($parent_form_langcode != $item_langcode) {
+              $language_key = $handler->getLanguageKey();
+              $item['entity']->{$language_key} = $parent_form_langcode;
+            }
+          }
+
           $controller->save($item['entity'], $context);
           $need_reset = true;
         }
