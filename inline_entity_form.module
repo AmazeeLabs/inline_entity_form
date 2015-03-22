@@ -88,7 +88,7 @@ function inline_entity_form_autocomplete($entity_type, $field_name, $bundle, $st
  * @param $instance
  *   The instance array of the reference field.
  *
- * @return
+ * @return EntityInlineEntityFormController|bool
  *   An instantiated controller object, or FALSE if none found.
  */
 function inline_entity_form_get_controller($instance) {
@@ -1498,7 +1498,8 @@ function inline_entity_form_field_attach_submit($parent_entity_type, $parent_ent
       $entity_ids = array();
       $need_reset = false;
       foreach ($values['entities'] as $item) {
-        if ($item['needs_save']) {
+        $translations_updated = $controller->processTranslations($item['entity'], $context);
+        if ($item['needs_save'] || $translations_updated) {
           $controller->save($item['entity'], $context);
           $need_reset = true;
         }

@@ -313,6 +313,11 @@ class EntityInlineEntityFormController {
       $entity->$key = $value;
     }
 
+    // If entity_translation module is used to manage translations, it can
+    // change original source language of the entity. Avoid this.
+    /* @see EntityTranslationDefaultHandler::entityFormSubmit() */
+    $form_state['entity_translation']['is_translation'] = TRUE;
+
     if ($info['fieldable']) {
       field_attach_submit($this->entityType, $entity, $entity_form, $form_state);
     }
@@ -404,4 +409,159 @@ class EntityInlineEntityFormController {
   public function delete($ids, $context) {
     entity_delete_multiple($this->entityType, $ids);
   }
+
+  /**
+   * Processes entity translations.
+   *
+   * @param object $entity
+   *   The entity object.
+   * @param array $context
+   *   Available keys:
+   *   - parent_entity_type: The type of the parent entity.
+   *   - parent_entity: The parent entity.
+   *
+   * @return bool
+   *   Returns TRUE if there were some changes made to the entity translations,
+   *   and therefore it should be saved.
+   */
+  public function processTranslations($entity, $context) {
+    if (!module_exists('entity_translation')) {
+      return FALSE;
+    }
+    if (!entity_translation_enabled($context['parent_entity_type'], $context['parent_entity']) || !entity_translation_enabled($this->entityType, $entity)) {
+      return FALSE;
+    }
+
+    $parent_handler = entity_translation_get_handler($context['parent_entity_type'], $context['parent_entity']);
+    $parent_langcode = $parent_handler->getFormLanguage();
+    if ($parent_langcode == LANGUAGE_NONE) {
+      return FALSE;
+    }
+
+    $handler = entity_translation_get_handler($this->entityType, $entity);
+    $langcode = $handler->getFormLanguage();
+    if ($langcode == $parent_langcode) {
+      return FALSE;
+    }
+
+    $source_langcode = $langcode;
+    $target_langcode = $parent_langcode;
+
+    if ($langcode == LANGUAGE_NONE) {
+      // Initialize translations.
+      $entity_info = entity_get_info($this->entityType);
+      if (isset($entity_info['entity keys']['language'])) {
+        $entity->{$entity_info['entity keys']['language']} = $target_langcode;
+      }
+      $handler->setTranslation(array(
+        'status' => 1,
+        'language' => $target_langcode,
+      ));
+      $handler->setOriginalLanguage($target_langcode);
+    }
+    else {
+      // Create/update translation record.
+      $translations = $handler->getTranslations();
+      $handler->setTranslation(array(
+        'status' => 1,
+        'language' => $target_langcode,
+        'source' => ($translations->original == $target_langcode) ? '' : $translations->original,
+      ));
+    }
+
+    // Process fields.
+    if ($source_langcode == LANGUAGE_NONE) {
+      $this->processFieldTranslations($entity, $source_langcode, $target_langcode);
+    }
+    else {
+      list($entity_id) = entity_extract_ids($this->entityType, $entity);
+      if (empty($entity_id)) {
+        $this->processFieldTranslations($entity, $source_langcode, $target_langcode);
+      }
+      else {
+        $entity_unchanged = entity_load_unchanged($this->entityType, $entity_id);
+        $this->processFieldTranslations($entity, $source_langcode, $target_langcode, $entity_unchanged);
+      }
+    }
+
+    return TRUE;
+  }
+
+  /**
+   * Processes fields translations.
+   *
+   * @param object $entity
+   * @param string $source_langcode
+   * @param string $target_langcode
+   * @param object|null $entity_unchanged
+   *   If the unchanged entity is provided, the source values will be restored
+   *   from it. If it's omitted, the source values will be removed.
+   */
+  protected function processFieldTranslations($entity, $source_langcode, $target_langcode, $entity_unchanged = NULL) {
+    list(, , $bundle) = entity_extract_ids($this->entityType, $entity);
+
+    // Prepare fields info. The cache only contains information about
+    // translatable fields. Its structure:
+    // [
+    //   {entity type} => [
+    //     {bundle} => [
+    //       0 => {field name},
+    //       1 => {title module legacy field name or null},
+    //       2 => {title module field replacement info or null},
+    //     ],
+    //     ...,
+    //   ],
+    //   ...,
+    // ]
+    $cache =& drupal_static(__CLASS__ . '::' . __METHOD__, array());
+    if (!isset($cache[$this->entityType][$bundle])) {
+      $cache[$this->entityType][$bundle] = array();
+      $replacement_info = module_invoke('title', 'field_replacement_info', $this->entityType);
+      $fields = array_intersect_key(field_info_fields(), field_info_instances($this->entityType, $bundle));
+      foreach ($fields as $field_name => $field_info) {
+        if ($field_info['translatable']) {
+          $legacy_field = NULL;
+          $legacy_field_info = NULL;
+          if (!empty($replacement_info)) {
+            foreach ($replacement_info as $_legacy_field => $_legacy_field_info) {
+              if ($_legacy_field_info['field']['field_name'] == $field_name) {
+                $legacy_field = $_legacy_field;
+                $legacy_field_info = $_legacy_field_info;
+                break;
+              }
+            }
+          }
+          $cache[$this->entityType][$bundle][] = array($field_name, $legacy_field, $legacy_field_info);
+        }
+      }
+    }
+
+    // Move or copy field values to the target language.
+    foreach ($cache[$this->entityType][$bundle] as $field_info) {
+      list($field_name, $legacy_field, $legacy_field_info) = $field_info;
+
+      // Copy source value to target language.
+      if (isset($entity->{$field_name}[$source_langcode])) {
+        $entity->{$field_name}[$target_langcode] = $entity->{$field_name}[$source_langcode];
+      }
+      else {
+        unset($entity->{$field_name}[$target_langcode]);
+      }
+
+      // Restore source value from unchanged entity, or remove it.
+      if (isset($entity_unchanged->{$field_name}[$source_langcode])) {
+        $entity->{$field_name}[$source_langcode] = $entity_unchanged->{$field_name}[$source_langcode];
+      }
+      else {
+        unset($entity->{$field_name}[$source_langcode]);
+      }
+
+      // The title module will call title_field_sync_set() on entity save. To
+      // make it use correct values, call title_field_sync_get() first.
+      if (isset($legacy_field)) {
+        module_invoke('title', 'field_sync_get', $this->entityType, $entity, $legacy_field, $legacy_field_info);
+      }
+    }
+  }
+
 }
