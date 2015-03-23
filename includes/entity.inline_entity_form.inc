@@ -313,13 +313,22 @@ class EntityInlineEntityFormController {
       $entity->$key = $value;
     }
 
-    // If entity_translation module is used to manage translations, it can
-    // change original source language of the entity. Avoid this.
+    // We want the child entities always be considered as a translations.
+    // Otherwise, the original language can be changed.
     /* @see EntityTranslationDefaultHandler::entityFormSubmit() */
-    $form_state['entity_translation']['is_translation'] = TRUE;
+    $revert_entity_translation_form_state = FALSE;
+    if (empty($form_state['entity_translation']['is_translation'])) {
+      $form_state['entity_translation']['is_translation'] = TRUE;
+      $revert_entity_translation_form_state = TRUE;
+    }
 
     if ($info['fieldable']) {
       field_attach_submit($this->entityType, $entity, $entity_form, $form_state);
+    }
+
+    // Don't leave traces in the form state since it can affect the parent form.
+    if ($revert_entity_translation_form_state) {
+      unset($form_state['entity_translation']);
     }
   }
 
