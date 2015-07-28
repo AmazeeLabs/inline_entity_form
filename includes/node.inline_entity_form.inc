@@ -65,8 +65,28 @@ class NodeInlineEntityFormController extends EntityInlineEntityFormController {
       '#weight' => 99,
     );
 
+
     $langcode = entity_language('node', $node);
+    if (($handler = module_invoke('entity_translation', 'get_handler', $this->entityType, $entity_form['#entity'])) && !$handler->isNewEntity()) {
+      $langcode = !empty($entity_form['#parent_language']) ? $entity_form['#parent_language'] : $handler->getLanguage();
+    }
+
     field_attach_form('node', $node, $entity_form, $form_state, $langcode);
+
+    // Make sure the entity_translation_prepare_element() will have the correct
+    // value in the '#source', which is the language of the parent entity.
+    // @todo: This needs a lot of testing: creating new nodes, update, with or
+    // without translation, etc...
+    list(, , $bundle) = entity_extract_ids($this->entityType, $entity_form['#entity']);
+    foreach (field_info_instances($this->entityType, $bundle) as $instance) {
+      $field_name = $instance['field_name'];
+      $field = field_info_field($field_name);
+
+      if ($field['translatable'] && !empty($entity_form[$field_name])) {
+        $element = &$entity_form[$field_name];
+        $element['#source'] = $langcode;
+      }
+    }
 
     return $entity_form;
   }
