@@ -453,6 +453,12 @@ class EntityInlineEntityFormController {
       return FALSE;
     }
 
+    // If we already have a translation in the parent language, skip update.
+    $translations = $handler->getTranslations();
+    if (isset($translations->data[$parent_langcode])) {
+      return FALSE;
+    }
+
     $source_langcode = $langcode;
     $target_langcode = $parent_langcode;
 
