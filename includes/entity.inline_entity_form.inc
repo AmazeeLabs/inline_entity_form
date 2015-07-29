@@ -453,9 +453,11 @@ class EntityInlineEntityFormController {
       return FALSE;
     }
 
-    // If we already have a translation in the parent language, skip update.
+    // If we already have a translation in the parent language that is not
+    // scheduled to insert/update (e.g "already existing translation"), skip
+    // processing.
     $translations = $handler->getTranslations();
-    if (isset($translations->data[$parent_langcode])) {
+    if (isset($translations->data[$parent_langcode]) && empty($translations->hook[$parent_langcode])) {
       return FALSE;
     }
 
