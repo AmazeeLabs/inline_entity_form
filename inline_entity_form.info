@@ -14,3 +14,4 @@ files[] = includes/commerce_product.inline_entity_form.inc
 files[] = includes/commerce_line_item.inline_entity_form.inc
 files[] = tests/inline_entity_form_test_base.test
 files[] = tests/multiple_values_widget.test
+files[] = tests/entity_translation_integration.test

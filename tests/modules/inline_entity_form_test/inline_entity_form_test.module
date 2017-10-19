@@ -146,6 +146,24 @@ function inline_entity_form_test_install() {
   );
   field_create_field($field);
 
+  $field = array(
+    'field_name' => 'field_multiple_nodes_translate',
+    'type' => 'entityreference',
+    'cardinality' => -1,
+    'translatable' => TRUE,
+    'required' => TRUE,
+    'settings' => array(
+      'target_type' => 'node',
+      'handler' => 'base',
+      'handler_settings' => array(
+        'target_bundles' => array(
+          'ief_reference_type' => 'ief_reference_type',
+        ),
+      ),
+    ),
+  );
+  field_create_field($field);
+
   $field_bases['field_positive_int'] = array(
     'active' => 1,
     'cardinality' => 1,
@@ -285,6 +303,31 @@ function inline_entity_form_test_install() {
     'entity_type' => 'node',
     'field_name' => 'field_multiple_nodes',
     'label' => 'Multiple nodes',
+    'required' => TRUE,
+    'widget' => array(
+      'type' => 'inline_entity_form',
+      'settings' => array(
+        'fields' => array(),
+        'type_settings' => array(
+          'allow_clone' => 0,
+          'allow_existing' => 0,
+          'allow_new' => 1,
+          'delete_references' => 0,
+          'label_plural' => 'nodes',
+          'label_singular' => 'node',
+          'match_operator' => 'CONTAINS',
+          'override_labels' => 0,
+        ),
+      ),
+    ),
+  );
+  field_create_instance($instance);
+
+  $instance = array(
+    'bundle' => 'ief_test_multiple',
+    'entity_type' => 'node',
+    'field_name' => 'field_multiple_nodes_translate',
+    'label' => 'Multiple nodes (translatable)',
     'required' => TRUE,
     'widget' => array(
       'type' => 'inline_entity_form',

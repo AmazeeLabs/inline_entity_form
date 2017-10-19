@@ -1,0 +1,256 @@
+<?php
+
+/**
+ * IEF-EntityTranslation integration tests.
+ *
+ * @group inline_entity_form
+ */
+class EntityTranslationIntegrationTest extends InlineEntityFormTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Entity translation integration',
+      'description' => 'Tests the integration of Entity Translation with the Inline Entity Form.',
+      'group' => 'Inline entity form',
+    );
+  }
+
+  /**
+   * @see InlineEntityFormTestBase::setUp()
+   */
+  protected function setUp() {
+    $modules = array(
+      'inline_entity_form',
+      'inline_entity_form_test',
+      'locale',
+      'entity_translation',
+      'entityreference',
+    );
+    parent::setUp($modules);
+
+    $this->administrator_user = $this->drupalCreateUser(array(
+      'create ief_reference_type content',
+      'edit any ief_reference_type content',
+      'delete any ief_reference_type content',
+      'create ief_test_multiple content',
+      'edit any ief_test_multiple content',
+      'delete any ief_test_multiple content',
+      'bypass node access',
+      'administer nodes',
+      'administer fields',
+      'administer languages',
+      'administer content types',
+      'administer blocks',
+      'access administration pages',
+      'administer site configuration',
+      'administer entity translation',
+      'translate any entity',
+    ));
+    $this->drupalLogin($this->administrator_user);
+    $this->addLanguage('de');
+    $this->enableUrlLanguageDetection();
+    $this->configureContentTypes();
+
+    $this->formContentAddUrl = 'node/add/ief-test-multiple';
+  }
+
+  /**
+   * Enable URL language detection.
+   */
+  protected function enableUrlLanguageDetection() {
+    // Enable URL language detection and selection.
+    $edit = array(
+      'language[enabled][locale-url]' => TRUE,
+      'language_content[enabled][locale-interface]' => TRUE,
+    );
+    $this->drupalPost('admin/config/regional/language/configure', $edit, t('Save settings'));
+    $this->assertRaw(t('Language negotiation configuration saved.'), t('URL language detection enabled.'));
+    $this->drupalGet('admin/config/regional/language/configure');
+    // Reset caches.
+    drupal_static_reset('locale_url_outbound_alter');
+    drupal_static_reset('language_list');
+  }
+
+  /**
+   * Install a specified language if it has not been already.
+   *
+   * Otherwise make sure that the language is enabled.
+   *
+   * @param $langcode
+   *   The language code to check.
+   */
+  protected function addLanguage($langcode) {
+    // Check to make sure that language has not already been installed.
+    $this->drupalGet('admin/config/regional/language');
+
+    if (strpos($this->drupalGetContent(), 'enabled[' . $langcode . ']') === FALSE) {
+      // Doesn't have language installed so add it.
+      $edit = array();
+      $edit['langcode'] = $langcode;
+      $this->drupalPost('admin/config/regional/language/add', $edit, t('Add language'));
+
+      // Make sure we are not using a stale list.
+      drupal_static_reset('language_list');
+      $languages = language_list('language');
+      $this->assertTrue(array_key_exists($langcode, $languages), t('Language was installed successfully.'));
+
+      if (array_key_exists($langcode, $languages)) {
+        $this->assertRaw(t('The language %language has been created and can now be used. More information is available on the <a href="@locale-help">help screen</a>.', array('%language' => $languages[$langcode]->name, '@locale-help' => url('admin/help/locale'))), t('Language has been created.'));
+      }
+    }
+    elseif ($this->xpath('//input[@type="checkbox" and @name=:name and @checked="checked"]', array(':name' => 'enabled[' . $langcode . ']'))) {
+      // It is installed and enabled. No need to do anything.
+      $this->assertTrue(TRUE, 'Language [' . $langcode . '] already installed and enabled.');
+    }
+    else {
+      // It is installed but not enabled. Enable it.
+      $this->assertTrue(TRUE, 'Language [' . $langcode . '] already installed.');
+      $this->drupalPost(NULL, array('enabled[' . $langcode . ']' => TRUE), t('Save configuration'));
+      $this->assertRaw(t('Configuration saved.'), t('Language successfully enabled.'));
+    }
+  }
+
+  /**
+   * Configure the "Inline entity form test" provided content types.
+   */
+  protected function configureContentTypes() {
+
+    // Configure Entity translation for each content type.
+    variable_set('entity_translation_settings_node__ief_reference_type', array(
+      'default_language' => 'xx-et-current',
+      'hide_language_selector' => 0,
+      'exclude_language_none' => 0,
+      'lock_language' => 0,
+      'shared_fields_original_only' => 0,
+    ));
+    variable_set('entity_translation_settings_node__ief_test_multiple', array(
+      'default_language' => 'xx-et-current',
+      'hide_language_selector' => 0,
+      'exclude_language_none' => 0,
+      'lock_language' => 0,
+      'shared_fields_original_only' => 0,
+    ));
+
+    // Make the ief_reference_type and the ief_test_multiple multilingual.
+    foreach (array('ief_reference_type' => 'IEF reference type', 'ief_test_multiple' => 'IEF test multiple') as $ief_content_type_machine_name => $ief_content_type) {
+      $edit = array();
+      $edit['language_content_type'] = ENTITY_TRANSLATION_ENABLED;
+      $this->drupalGet('admin/structure/types/manage/' . $ief_content_type_machine_name);
+      $this->drupalPost('admin/structure/types/manage/' . $ief_content_type_machine_name, $edit, t('Save content type'));
+      $this->assertRaw(t('The content type %type has been updated.', array('%type' => $ief_content_type)), t('%type content type has been updated.', array('%type' => $ief_content_type)));
+    }
+
+    // Make the fields of the ief_reference_type multilingual.
+    $edit = array();
+    $edit['field[translatable]'] = 1;
+    $this->drupalPost('admin/structure/types/manage/ief_reference_type/fields/field_first_name', $edit, t('Save settings'));
+    $this->assertRaw(t('Saved %field configuration.', array('%field' => 'First name')), t('field_first_name field settings have been updated.'));
+    $this->drupalPost('admin/structure/types/manage/ief_reference_type/fields/field_last_name', $edit, t('Save settings'));
+    $this->assertRaw(t('Saved %field configuration.', array('%field' => 'Last name')), t('field_last_name field settings have been updated.'));
+
+    // Change the display of the entity reference to display the rendered
+    // entity.
+    $edit_field = array(
+      'fields[field_multiple_nodes][type]' => 'entityreference_entity_view',
+      'refresh_rows' => 'field_multiple_nodes',
+    );
+    $this->drupalGet('admin/structure/types/manage/ief_test_multiple/display');
+    $this->drupalPostAJAX(NULL, $edit_field, array('op' => t('Refresh')));
+    $this->drupalPost(NULL, array(), t('Save'));
+
+    $edit_field = array(
+      'fields[field_multiple_nodes_translate][type]' => 'entityreference_entity_view',
+      'refresh_rows' => 'field_multiple_nodes_translate',
+    );
+    $this->drupalGet('admin/structure/types/manage/ief_test_multiple/display');
+    $this->drupalPostAJAX(NULL, $edit_field, array('op' => t('Refresh')));
+    $this->drupalPost(NULL, array(), t('Save'));
+
+  }
+
+  /**
+   * Tests translating inline entities.
+   */
+  public function testEntityTranslation() {
+    $language_list = language_list();
+
+    // Get a node create form.
+    // Create a new node using IEF from a non-translatable field.
+    $this->drupalGet($this->formContentAddUrl);
+    $target_node_from_untranslatable_field_title = $this->randomName();
+    $edit_en = array(
+      'field_multiple_nodes[und][form][title]' => $target_node_from_untranslatable_field_title,
+      'field_multiple_nodes[und][form][field_first_name][en][0][value]' => 'John ' . $target_node_from_untranslatable_field_title,
+      'field_multiple_nodes[und][form][field_last_name][en][0][value]' => 'Doe ' . $target_node_from_untranslatable_field_title,
+    );
+    $this->drupalPostAjax(NULL, $edit_en, $this->getButtonName('//input[@type="submit" and @id="edit-field-multiple-nodes-und-form-actions-ief-add-save"]'));
+    // Create a new node using IEF from a translatable field.
+    $target_node_from_translatable_field_title_en = $this->randomName();
+    $edit_en = array(
+      'field_multiple_nodes_translate[en][form][title]' => $target_node_from_translatable_field_title_en,
+      'field_multiple_nodes_translate[en][form][field_first_name][en][0][value]' => 'John ' . $target_node_from_translatable_field_title_en,
+      'field_multiple_nodes_translate[en][form][field_last_name][en][0][value]' => 'Doe ' . $target_node_from_translatable_field_title_en,
+    );
+    $this->drupalPostAjax(NULL, $edit_en, $this->getButtonName('//input[@type="submit" and @id="edit-field-multiple-nodes-translate-en-form-actions-ief-add-save"]'));
+
+    // Save the parent node, giving it a title.
+    $edit_parent = array(
+      'title' => 'Source Multilingual Node',
+    );
+    $this->drupalPost(NULL, $edit_parent, t('Save'));
+    $title = reset($edit_parent);
+    $node = $this->drupalGetNodeByTitle($title);
+
+    // Translate the parent node, via IEF.
+    $this->drupalGet('node/' . $node->nid . '/edit/add/en/de');
+    // Add a translation  via IEF to the node referenced by the untranslatable field.
+    $this->drupalPostAJAX(NULL, array(), $this->getButtonName('//input[@type="submit" and @id="edit-field-multiple-nodes-und-entities-0-actions-ief-entity-edit"]'));
+    $edit_de = array(
+      'field_multiple_nodes[und][entities][0][form][field_first_name][de][0][value]' => 'Max ' . $target_node_from_untranslatable_field_title,
+      'field_multiple_nodes[und][entities][0][form][field_last_name][de][0][value]' => 'Muster ' . $target_node_from_untranslatable_field_title,
+    );
+    $this->drupalPostAJAX(NULL, $edit_de, $this->getButtonName('//input[@type="submit" and @id="edit-field-multiple-nodes-und-entities-0-form-actions-ief-edit-save"]'));
+    // Create a new node using IEF, in German, via the translatable field.
+    $target_node_from_translatable_field_title_de = $this->randomName();
+    $edit_de = array(
+      'field_multiple_nodes_translate[de][form][title]' => $target_node_from_translatable_field_title_de,
+      'field_multiple_nodes_translate[de][form][field_first_name][de][0][value]' => 'Max ' . $target_node_from_translatable_field_title_de,
+      'field_multiple_nodes_translate[de][form][field_last_name][de][0][value]' => 'Muster ' . $target_node_from_translatable_field_title_de,
+    );
+    $this->drupalPostAjax(NULL, $edit_de, $this->getButtonName('//input[@type="submit" and @id="edit-field-multiple-nodes-translate-de-form-actions-ief-add-save"]'));
+    $this->drupalPost(NULL, array(), t('Save'));
+
+    // Check the parent node's display in English.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertText('John ' . $target_node_from_untranslatable_field_title);
+    $this->assertText('Doe ' . $target_node_from_untranslatable_field_title);
+    $this->assertText('John ' . $target_node_from_translatable_field_title_en);
+    $this->assertText('Doe ' . $target_node_from_translatable_field_title_en);
+
+    // Check the parent node's display in German.
+    $this->drupalGet('node/' . $node->nid, array('language' => $language_list['de']));
+    $this->assertText('Max ' . $target_node_from_untranslatable_field_title);
+    $this->assertText('Muster ' . $target_node_from_untranslatable_field_title);
+    $this->assertText('Max ' . $target_node_from_translatable_field_title_de);
+    $this->assertText('Muster ' . $target_node_from_translatable_field_title_de);
+
+    // Check the parent form's edit values in English.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->drupalPostAjax(NULL, array(), $this->getButtonName('//input[@type="submit" and @id="edit-field-multiple-nodes-und-entities-0-actions-ief-entity-edit"]'));
+    $this->assertFieldById('edit-field-multiple-nodes-und-entities-0-form-field-first-name-en-0-value', 'John ' . $target_node_from_untranslatable_field_title);
+    $this->assertFieldById('edit-field-multiple-nodes-und-entities-0-form-field-last-name-en-0-value', 'Doe ' . $target_node_from_untranslatable_field_title);
+    $this->drupalPostAjax(NULL, array(), $this->getButtonName('//input[@type="submit" and @id="edit-field-multiple-nodes-translate-en-entities-0-actions-ief-entity-edit"]'));
+    $this->assertFieldById('edit-field-multiple-nodes-translate-en-entities-0-form-field-first-name-en-0-value', 'John ' . $target_node_from_translatable_field_title_en);
+    $this->assertFieldById('edit-field-multiple-nodes-translate-en-entities-0-form-field-last-name-en-0-value', 'Doe ' . $target_node_from_translatable_field_title_en);
+
+    // Check the parent form's edit values in German.
+    $this->drupalGet('node/' . $node->nid . '/edit', array('language' => $language_list['de']));
+    $this->drupalPostAjax(NULL, array(), $this->getButtonName('//input[@type="submit" and  @id="edit-field-multiple-nodes-und-entities-0-actions-ief-entity-edit"]'));
+    $this->assertFieldById('edit-field-multiple-nodes-und-entities-0-form-field-first-name-de-0-value', 'Max ' . $target_node_from_untranslatable_field_title);
+    $this->assertFieldById('edit-field-multiple-nodes-und-entities-0-form-field-last-name-de-0-value', 'Muster ' . $target_node_from_untranslatable_field_title);
+    $this->drupalPostAJAX(NULL, array(), $this->getButtonName('//input[@type="submit" and  @id="edit-field-multiple-nodes-translate-de-entities-0-actions-ief-entity-edit"]'));
+    $this->assertFieldById('edit-field-multiple-nodes-translate-de-entities-0-form-field-first-name-de-0-value', 'Max ' . $target_node_from_translatable_field_title_de);
+    $this->assertFieldById('edit-field-multiple-nodes-translate-de-entities-0-form-field-last-name-de-0-value', 'Muster ' . $target_node_from_translatable_field_title_de);
+  }
+
+}
