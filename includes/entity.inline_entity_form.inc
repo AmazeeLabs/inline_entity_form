@@ -284,7 +284,7 @@ class EntityInlineEntityFormController {
    */
   protected function entityFormTranslation(&$entity_form) {
     if (($handler = module_invoke('entity_translation', 'get_handler', $this->entityType, $entity_form['#entity'])) && !$handler->isNewEntity()) {
-      $form_langcode = $handler->getActiveLanguage();
+      $form_langcode = $handler->getFormLanguage();
       $langcode = !empty($entity_form['#parent_language']) ? $entity_form['#parent_language'] : $handler->getLanguage();
       $translations = $handler->getTranslations();
       $update_langcode = $form_langcode && ($form_langcode != $langcode);
@@ -399,7 +399,7 @@ class EntityInlineEntityFormController {
       if (isset($parent_info['entity keys']['language']) && isset($form_state['values'][$parent_info['entity keys']['language']])) {
         $entity->{$info['entity keys']['language']} = $form_state['values'][$parent_info['entity keys']['language']];
         $handler = module_invoke('entity_translation', 'get_handler', $this->entityType, $entity);
-        $lang = $handler->getActiveLanguage();
+        $lang = $handler->getFormLanguage();
         if ($lang == LANGUAGE_NONE) {
           if ($entity_form['#parent_language'] != LANGUAGE_NONE) {
             $handler->setFormLanguage($entity_form['#parent_language']);
@@ -443,7 +443,7 @@ class EntityInlineEntityFormController {
       $translation = array(
         'entity_type' => $this->entityType,
         'entity_id' => $id,
-        'language' => $handler->getActiveLanguage(),
+        'language' => $handler->getFormLanguage(),
         'source' => $source,
         'status' => 1,
       );

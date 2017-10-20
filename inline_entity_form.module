@@ -1731,7 +1731,7 @@ function inline_entity_form_field_attach_submit($parent_entity_type, $parent_ent
             // Fetch the parent language - with entity_translation this will
             // return the current form language and thus match perfectly.
             $parent_entity_language = entity_language($parent_entity_type, $parent_entity);
-            $entity_form_language = $handler->getActiveLanguage();
+            $entity_form_language = $handler->getFormLanguage();
             // If the field is language independent set the parent entity
             // language as form language of the entity.
             if ($langcode == LANGUAGE_NONE && $entity_form_language != $parent_entity_language) {
@@ -1754,8 +1754,9 @@ function inline_entity_form_field_attach_submit($parent_entity_type, $parent_ent
       }
 
       if (!empty($entity_ids)) {
+        $parent_entity_language = entity_language($parent_entity_type, $parent_entity);
         // Set the list of ids as the field value.
-        $parent_entity->{$field_name}[$langcode] = $entity_ids;
+        $parent_entity->{$field_name}[$parent_entity_language] = $entity_ids;
       }
     }
   }
