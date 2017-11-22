@@ -463,7 +463,15 @@ function inline_entity_form_field_widget_form(&$form, &$form_state, $field, $ins
   }
   else {
     // Get the langcode of the parent entity.
-    $parent_langcode = (!empty($form_state['entity_translation']['is_translation'])) ? $form_state['entity_translation']['form_langcode'] : entity_language($element['#entity_type'], $element['#entity']);
+    $parent_langcode = !empty($form_state['entity_translation']['is_translation'])
+      ? $form_state['entity_translation']['form_langcode']
+      : ($_SERVER['REQUEST_METHOD'] === 'POST'
+        ? entity_language($element['#entity_type'], $element['#entity'])
+        // When using the "Single value" widget,
+        // $form_state['complete form']['language']['#value'] is not available
+        // on the initial form. Therefore we have to use default language from
+        // the entity translation settings.
+        : entity_translation_settings($element['#entity_type'], $element['#bundle'])['default_language']);
     $handler = entity_translation_get_handler($element['#entity_type'], $element['#entity']);
     $translations = $handler->getTranslations();
     $parent_is_translation = isset($translations->original) && $parent_langcode != $translations->original;
